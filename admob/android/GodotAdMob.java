@@ -43,13 +43,7 @@ public class GodotAdMob extends Godot.SingletonBase
 	private String LoadedRewardedVideoId = null;
 	private boolean showImmediately = false;
 
-	private Handler timeoutHandler =  new Handler() {
-		@Override
-		public void handleMessage(Message msg) {
-			if (!showImmediately) return;
-			onRewardedVideoFailedToLoad(AdRequest.ERROR_CODE_NETWORK_ERROR);
-		}
-	};
+	private Handler timeoutHandler =  null;
 	
 	/* Init
 	 * ********************************************************************** */
@@ -63,6 +57,20 @@ public class GodotAdMob extends Godot.SingletonBase
 		this.isReal = isReal;
 		this.instance_id = instance_id;
 		Log.d("godot", "AdMob: init");
+		
+		activity.runOnUiThread(new Runnable()
+		{
+			@Override public void run()
+			{
+				timeoutHandler = new Handler() {
+					@Override
+					public void handleMessage(Message msg) {
+						if (!showImmediately) return;
+						onRewardedVideoFailedToLoad(AdRequest.ERROR_CODE_NETWORK_ERROR);
+					}
+				};
+			}
+		});
 	}
 
 
