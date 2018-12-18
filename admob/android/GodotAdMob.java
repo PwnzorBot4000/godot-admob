@@ -37,6 +37,9 @@ public class GodotAdMob extends Godot.SingletonBase
 	private FrameLayout.LayoutParams adParams = null; // Store the layout params
 
 	private RewardedVideoAd rewardedVideoAd = null; // Rewarded Video object
+	private final String LoadingRewardedVideoId = null;
+	private final String LoadedRewardedVideoId = null;
+	private boolean showImmediately = false;
 
 	/* Init
 	 * ********************************************************************** */
@@ -86,7 +89,11 @@ public class GodotAdMob extends Godot.SingletonBase
 					@Override
 					public void onRewardedVideoAdLoaded() {
 						Log.w("godot", "AdMob: onRewardedVideoAdLoaded");
-						GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_loaded", new Object[] { });
+						LoadedRewardedVideoId = LoadingRewardedVideoId;
+						if (showImmediately)
+							showRewardedVideo(LoadedRewardedVideoId);
+						else
+							GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_loaded", new Object[] { });
 					}
 
 					@Override
@@ -133,7 +140,12 @@ public class GodotAdMob extends Godot.SingletonBase
 					initRewardedVideo();
 				}
 
-				if (!rewardedVideoAd.isLoaded()) {
+				showImmediately = false;
+				
+				if (!rewardedVideoAd.isLoaded() ||
+					LoadedRewardedVideoId != id && LoadingRewardedVideoId != id) {
+					LoadingRewardedVideoId = id;
+					LoadedRewardedVideoId = null;
 					rewardedVideoAd.loadAd(id, new AdRequest.Builder().build());
 				}
 			}
@@ -143,13 +155,16 @@ public class GodotAdMob extends Godot.SingletonBase
 	/**
 	 * Show a Rewarded Video
 	 */
-	public void showRewardedVideo() {
+	public void showRewardedVideo(final String id) {
 		activity.runOnUiThread(new Runnable()
 		{
 			@Override public void run()
 			{
-				if (rewardedVideoAd.isLoaded()) {
+				if (rewardedVideoAd.isLoaded() && LoadedRewardedVideoId == id) {
 					rewardedVideoAd.show();
+				} else {
+					loadRewardedVideo(id);
+					showImmediately = true;
 				}
 			}
 		});
