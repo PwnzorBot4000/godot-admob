@@ -12,6 +12,8 @@ import android.view.ViewGroup.LayoutParams;
 import android.provider.Settings;
 import android.graphics.Color;
 import android.util.Log;
+import android.os.Handler;
+import android.os.Message;
 import java.util.Locale;
 import android.view.Gravity;
 import android.view.View;
@@ -37,10 +39,18 @@ public class GodotAdMob extends Godot.SingletonBase
 	private FrameLayout.LayoutParams adParams = null; // Store the layout params
 
 	private RewardedVideoAd rewardedVideoAd = null; // Rewarded Video object
-	private final String LoadingRewardedVideoId = null;
-	private final String LoadedRewardedVideoId = null;
+	private String LoadingRewardedVideoId = null;
+	private String LoadedRewardedVideoId = null;
 	private boolean showImmediately = false;
 
+	private Handler timeoutHandler =  new Handler() {
+		@Override
+		public void handleMessage(Message msg) {
+			if (!showImmediately) return;
+			onRewardedVideoFailedToLoad(AdRequest.ERROR_CODE_NETWORK_ERROR);
+		}
+	};
+	
 	/* Init
 	 * ********************************************************************** */
 
@@ -82,8 +92,7 @@ public class GodotAdMob extends Godot.SingletonBase
 
 					@Override
 					public void onRewardedVideoAdFailedToLoad(int errorCode) {
-						Log.w("godot", "AdMob: onRewardedVideoAdFailedToLoad. errorCode: " + errorCode);
-						GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_failed_to_load", new Object[] { errorCode });
+						onRewardedVideoFailedToLoad(errorCode);
 					}
 
 					@Override
@@ -126,7 +135,15 @@ public class GodotAdMob extends Godot.SingletonBase
 		});
 
 	}
-
+	
+	public void onRewardedVideoFailedToLoad(int errorCode){
+		Log.w("godot", "AdMob: onRewardedVideoAdFailedToLoad. errorCode: " + errorCode);
+		showImmediately = false;
+		LoadingRewardedVideoId = null;
+		LoadedRewardedVideoId = null;
+		GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_failed_to_load", new Object[] { errorCode });
+	}
+	
 	/**
 	 * Load a Rewarded Video
 	 * @param String id AdMod Rewarded video ID
@@ -162,9 +179,13 @@ public class GodotAdMob extends Godot.SingletonBase
 			{
 				if (rewardedVideoAd.isLoaded() && LoadedRewardedVideoId == id) {
 					rewardedVideoAd.show();
+					showImmediately = false;
+					LoadingRewardedVideoId = null;
+					LoadedRewardedVideoId = null;
 				} else {
 					loadRewardedVideo(id);
 					showImmediately = true;
+					timeoutHandler.sendEmptyMessageDelayed(0, 10000);
 				}
 			}
 		});
