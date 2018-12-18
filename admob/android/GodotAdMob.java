@@ -42,8 +42,6 @@ public class GodotAdMob extends Godot.SingletonBase
 	private String LoadingRewardedVideoId = null;
 	private String LoadedRewardedVideoId = null;
 	private boolean showImmediately = false;
-
-	private Handler timeoutHandler =  null;
 	
 	/* Init
 	 * ********************************************************************** */
@@ -57,20 +55,6 @@ public class GodotAdMob extends Godot.SingletonBase
 		this.isReal = isReal;
 		this.instance_id = instance_id;
 		Log.d("godot", "AdMob: init");
-		
-		activity.runOnUiThread(new Runnable()
-		{
-			@Override public void run()
-			{
-				timeoutHandler = new Handler() {
-					@Override
-					public void handleMessage(Message msg) {
-						if (!showImmediately) return;
-						onRewardedVideoFailedToLoad(AdRequest.ERROR_CODE_NETWORK_ERROR);
-					}
-				};
-			}
-		});
 	}
 
 
@@ -100,16 +84,24 @@ public class GodotAdMob extends Godot.SingletonBase
 
 					@Override
 					public void onRewardedVideoAdFailedToLoad(int errorCode) {
-						onRewardedVideoFailedToLoad(errorCode);
+						Log.w("godot", "AdMob: onRewardedVideoAdFailedToLoad. errorCode: " + errorCode);
+						showImmediately = false;
+						LoadingRewardedVideoId = null;
+						LoadedRewardedVideoId = null;
+						GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_failed_to_load", new Object[] { errorCode });				
 					}
 
 					@Override
 					public void onRewardedVideoAdLoaded() {
 						Log.w("godot", "AdMob: onRewardedVideoAdLoaded");
 						LoadedRewardedVideoId = LoadingRewardedVideoId;
-						if (showImmediately)
-							showRewardedVideo(LoadedRewardedVideoId);
-						else
+						if (showImmediately) {
+							showImmediately = false;
+							LoadingRewardedVideoId = null;
+							LoadedRewardedVideoId = null;
+							rewardedVideoAd.show();
+						}
+						else if (LoadedRewardedVideoId != null)
 							GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_loaded", new Object[] { });
 					}
 
@@ -144,14 +136,6 @@ public class GodotAdMob extends Godot.SingletonBase
 
 	}
 	
-	public void onRewardedVideoFailedToLoad(int errorCode){
-		Log.w("godot", "AdMob: onRewardedVideoAdFailedToLoad. errorCode: " + errorCode);
-		showImmediately = false;
-		LoadingRewardedVideoId = null;
-		LoadedRewardedVideoId = null;
-		GodotLib.calldeferred(instance_id, "_on_rewarded_video_ad_failed_to_load", new Object[] { errorCode });
-	}
-	
 	/**
 	 * Load a Rewarded Video
 	 * @param String id AdMod Rewarded video ID
@@ -161,14 +145,12 @@ public class GodotAdMob extends Godot.SingletonBase
 		{
 			@Override public void run()
 			{
-				if (rewardedVideoAd == null) {
+				if (rewardedVideoAd == null)
 					initRewardedVideo();
-				}
-
-				showImmediately = false;
 				
-				if (!rewardedVideoAd.isLoaded() ||
-					LoadedRewardedVideoId != id && LoadingRewardedVideoId != id) {
+				if (!(rewardedVideoAd.isLoaded() &&
+					  (LoadedRewardedVideoId == id || LoadingRewardedVideoId == id))) {
+					showImmediately = false;
 					LoadingRewardedVideoId = id;
 					LoadedRewardedVideoId = null;
 					rewardedVideoAd.loadAd(id, new AdRequest.Builder().build());
@@ -185,18 +167,32 @@ public class GodotAdMob extends Godot.SingletonBase
 		{
 			@Override public void run()
 			{
+				if (rewardedVideoAd == null)
+					initRewardedVideo();
+
 				if (rewardedVideoAd.isLoaded() && LoadedRewardedVideoId == id) {
-					rewardedVideoAd.show();
 					showImmediately = false;
 					LoadingRewardedVideoId = null;
 					LoadedRewardedVideoId = null;
+					rewardedVideoAd.show();
 				} else {
-					loadRewardedVideo(id);
 					showImmediately = true;
-					timeoutHandler.sendEmptyMessageDelayed(0, 10000);
+					LoadingRewardedVideoId = id;
+					LoadedRewardedVideoId = null;
+					rewardedVideoAd.loadAd(id, new AdRequest.Builder().build());
 				}
 			}
 		});
+	}
+
+	/**
+	 * Cancel a Rewarded Video from being shown
+	 * @param String id AdMob Rewarded video ID
+	 */
+	public void cancelRewardedVideo() {
+		showImmediately = false;
+		LoadingRewardedVideoId = null;
+		LoadedRewardedVideoId = null;
 	}
 
 
@@ -531,7 +527,7 @@ public class GodotAdMob extends Godot.SingletonBase
 			// Interstitial
 			"loadInterstitial", "showInterstitial", 
 			// Rewarded video
-			"loadRewardedVideo", "showRewardedVideo"
+			"loadRewardedVideo", "showRewardedVideo", "cancelRewardedVideo"
 		});
 		activity = p_activity;
 	}
